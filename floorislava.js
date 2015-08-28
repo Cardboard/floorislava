@@ -1,4 +1,5 @@
 // 
+//var gamepad = navigator.getGamepads()[0];
 var TILESIZE = 64
 var MAP_HEIGHT = 7;
 var MAP_WIDTH = 10;
