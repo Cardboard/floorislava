@@ -151,22 +151,22 @@ function update() {
 
 // move a player to a new coordinate
 function move(dir, dist) {
-    var x = player['x'];
-    var y = player['y'];
+    var newx = player['x'];
+    var newy = player['y'];
     // set default distance to 1
     mode = typeof mode !== 'undefined' ? mode : 1;
     // adjust position based on distance to be moved
-    if (dir == 0) x+=dist;
-    if (dir == 1) y-=dist;
-    if (dir == 2) x-=dist;
-    if (dir == 3) y+=dist;
+    if (dir == 0) newx+=dist;
+    if (dir == 1) newy-=dist;
+    if (dir == 2) newx-=dist;
+    if (dir == 3) newy+=dist;
     // check that the move is possible
-    if (check_move(x, y, dir)) {
+    if (check_move(player['x'], player['y'], newx, newy, dir)) {
        // console.log('Player moved from (' + player[0] + ', ' + player[1] +
        //         ') to (' + x + ', ' + y + ')');
         //add_move(player[0], player[1], x, y, dir, TWEENSPEED);
-        player['newx'] = x;
-        player['newy'] = y;
+        player['newx'] = newx;
+        player['newy'] = newy;
     }
 }
 
@@ -207,13 +207,15 @@ function push(dir, x, y) {
 
 // check if a player's intended move is possible
 // return true if the movement is possible
-function check_move(newx, newy, dir) {
+function check_move(x, y, newx, newy, dir) {
     if (map[newy][newx]['type'] === ' ') {
         console.log(newx, newy);
         console.log("LAVA LAVA LAVA");
         return false;
     }
-    if ( !(is_blocked(newx, newy, (dir + 2) % 4)) ) {
+
+    if ( !(is_blocked(x, y, (dir + 2) % 4, true))
+    && !(is_blocked(newx, newy, (dir + 2) % 4, false)) ) {
         return true;
     }
     console.log("direction IS blocked");
@@ -221,12 +223,19 @@ function check_move(newx, newy, dir) {
 }
 
 // check if tile has a barrier on a given side
-function is_blocked(x, y, side) {
+function is_blocked(x, y, side, underneath) {
+    if (underneath === true) {
+        underneath = 2;
+    } else {
+        underneath = 0;
+    }
     // if the map ends in either direction blocked
-    if (player['x'] === 0 && side === 0) return true;
-    if (player['x'] === MAP_WIDTH && side === 2) return true;
-    if (player['y'] === 0 && side === 1) return true;
-    if (player['y'] === MAP_HEIGHT && side === 3) return true;
+    if (underneath === false) {
+        if (player['x'] === 0 && side === 0) return true;
+        if (player['x'] === MAP_WIDTH && side === 2) return true;
+        if (player['y'] === 0 && side === 1) return true;
+        if (player['y'] === MAP_HEIGHT && side === 3) return true;
+    }
     // get tile info from the map 
     var tile_type = map[y][x]['type'];
     var tile_dir = map[y][x]['dir'];
@@ -236,10 +245,11 @@ function is_blocked(x, y, side) {
     tile_rotated[1] = tile[Math.abs((1-tile_dir)%4)];
     tile_rotated[2] = tile[Math.abs((2-tile_dir)%4)];
     tile_rotated[3] = tile[Math.abs((3-tile_dir)%4)];
+    console.log(tile_rotated, tile_rotated[(side+underneath)%4]);
 
     // return true if the tile has a barrier on the side
     // the player wishes to move into
-    return (tile_rotated[side] == 1);
+    return (tile_rotated[(side + underneath) % 4] === 1);
 }
 
 // move the player from one position to another with in-between frames
