@@ -7,7 +7,7 @@ var TILES =
     {' ': {move: false, rot: false, slide: false,
               barriers: [0,0,0,0]} // blocked at [ right, top, left, down ]
     ,
-    '#': {move: true, rot: false, slide: false,
+    '#': {move: true, rot: false, slide: true,
               barriers: [0,0,1,0]} // blocked at [ right, top, left, down ]
     };
 var TWEENSPEED = 5;
@@ -15,26 +15,26 @@ var move_timer = 0;
 var action_timer = 0;
 var move_timer_time = 10;
 var action_timer_time = 10;
-var player = {x:0, y:3, dir:0, 
-    newx:0, newy:3, tweenx:0, tweeny:0}; // [x, y, direction]
+var player = {x:0, y:0, dir:0, 
+    newx:0, newy:0, tweenx:0, tweeny:0}; // [x, y, direction]
 var map;
 var map_default = []; // for resetting
-var level_0 = { startx: 4, starty: 0, //[ (end_x, end_y), [objects], [directions] ] 
+var level_0 = { startx: 4, starty: 3, //[ (end_x, end_y), [objects], [directions] ] 
 types: [
+    '          ',
+    '          ',
     '    #     ',
+    '   ###    ',
     '    #     ',
-    '    #     ',
-    '### #     ',
-    ' #        ',
-    ' #        ',
+    '          ',
     '          '], 
 dirs: [
-    '    0     ',
-    '    0     ',
-    '    0     ',
-    '131 3     ',
-    ' 0        ',
-    ' 0        ',
+    '          ',
+    '          ',
+    '    3     ',
+    '   002    ',
+    '    1     ',
+    '          ',
     '          ']
 };
 
@@ -70,6 +70,11 @@ function level2map(level) {
     map.push(newrow);
     newrow = [];
     }
+    map['startx'] = level['startx'];
+    map['starty'] = level['starty'];
+    map['endx'] = level['endx'];
+    map['endy'] = level['endy'];
+    set_player_loc(map['startx'], map['starty']);
 }
 
 
@@ -182,12 +187,16 @@ function push(dir, x, y) {
    if (dir === 3) yadd = 1;
    var tile_x = x + xadd;
    var tile_y = y + yadd;
-   var old_tile;
-   var new_tile;
+   if (tile_x >= MAP_WIDTH || tile_x < 0 || tile_y >= MAP_HEIGHT || tile_y < 0) return false;
    // find tile that will be pushed (if possible) 
    if (map[tile_y][tile_x]['move']) {
        // check for blocks in the way of a pushable block
        if (map[tile_y+yadd][tile_x+xadd]['type'] === ' ') {
+           // recurse for sliding tileis
+           if (map[tile_y][tile_x]['slide']) {
+               slide(dir, tile_x, tile_y, xadd, yadd);
+               return;
+           }
            // set the tiles' x and newx, so they animate
            map[tile_y][tile_x]['x'] = tile_x;
            map[tile_y][tile_x]['newx'] = tile_x + xadd;
@@ -198,25 +207,60 @@ function push(dir, x, y) {
            map[tile_y+yadd][tile_x+xadd]['y'] = tile_y;
            map[tile_y+yadd][tile_x+xadd]['newy'] = tile_y + yadd;
 
-           // recurse for sliding tiles
-           if (map[tile_y][tile_x]['slide']) push(dir, tile_x+xadd, tile_y+yadd);
        }
    }
+}
 
-
+function slide(dir, x, y, xadd, yadd) {
+    console.log(x+xadd, MAP_WIDTH);
+    if (x + xadd < MAP_WIDTH
+    &&  x + xadd >= 0
+    &&  y + yadd < MAP_HEIGHT
+    &&  y + yadd >= 0
+    &&  map[y+yadd][x+xadd]['type'] == ' ') {
+        console.log('sliding..', x+xadd, y+yadd);
+        if (xadd > 0) xadd += 1;
+        if (xadd < 0) xadd -= 1;
+        if (yadd > 0) yadd += 1;
+        if (yadd < 0) yadd -= 1;
+        slide(dir, x, y, xadd, yadd);
+    } else {
+        console.log('*impact*');
+        var tile_x = x;
+        var tile_y = y;
+        if (xadd > 0) xadd -= 1;
+        if (xadd < 0) xadd += 1;
+        if (yadd > 0) yadd -= 1;
+        if (yadd < 0) yadd += 1;
+        // set the tiles' x and newx, so they animate
+        map[tile_y][tile_x]['x'] = tile_x;
+        map[tile_y][tile_x]['newx'] = tile_x + xadd;
+        map[tile_y+yadd][tile_x+xadd]['x'] = tile_x;
+        map[tile_y+yadd][tile_x+xadd]['newx'] = tile_x + xadd;
+        map[tile_y][tile_x]['y'] = tile_y;
+        map[tile_y][tile_x]['newy'] = tile_y + yadd;
+        map[tile_y+yadd][tile_x+xadd]['y'] = tile_y;
+        map[tile_y+yadd][tile_x+xadd]['newy'] = tile_y + yadd;
+    }
 }
 
 // check if a player's intended move is possible
 // return true if the movement is possible
 function check_move(x, y, newx, newy, dir) {
+    // if the map ends in either direction blocked
+    if (player['x'] === 0 && dir === 2) return false;
+    if (player['x'] === MAP_WIDTH-1 && dir === 0) return false;
+    if (player['y'] === 0 && dir === 1) return false;
+    if (player['y'] === MAP_HEIGHT-1 && dir === 3) return false;
+
     if (map[newy][newx]['type'] === ' ') {
         console.log(newx, newy);
         console.log("LAVA LAVA LAVA");
         return false;
     }
 
-    if ( !(is_blocked(x, y, (dir + 2) % 4, true))
-    && !(is_blocked(newx, newy, (dir + 2) % 4, false)) ) {
+    if ( !(is_blocked(newx, newy, (dir + 2) % 4, false))
+    && !(is_blocked(x, y, (dir + 2) % 4, true)) ) {
         return true;
     }
     console.log("direction IS blocked");
@@ -229,13 +273,6 @@ function is_blocked(x, y, side, underneath) {
         underneath = 2;
     } else {
         underneath = 0;
-    }
-    // if the map ends in either direction blocked
-    if (underneath === false) {
-        if (player['x'] === 0 && side === 0) return true;
-        if (player['x'] === MAP_WIDTH && side === 2) return true;
-        if (player['y'] === 0 && side === 1) return true;
-        if (player['y'] === MAP_HEIGHT && side === 3) return true;
     }
     // get tile info from the map 
     var tile_type = map[y][x]['type'];
@@ -353,6 +390,14 @@ function swap_tiles(x, y, newx, newy) {
      new_tile['tweeny'] = 0;
 }
 
+// move the player without tweening
+function set_player_loc(x, y) {
+    player['x'] = x;
+    player['newx'] = x;
+    player['y'] = y;
+    player['newy'] = y
+}
+    
 
 // sets the players move timer to its default value
 function set_move_timer() {
