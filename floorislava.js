@@ -179,19 +179,26 @@ function push(dir, x, y) {
    if (dir === 1) yadd = -1;
    if (dir === 2) xadd = -1;
    if (dir === 3) yadd = 1;
-   var tilex = x + xadd;
-   var tiley = y + yadd;
+   var tile_x = x + xadd;
+   var tile_y = y + yadd;
+   var old_tile;
+   var new_tile;
    // find tile that will be pushed (if possible) 
-   if (map[tiley][tilex]['move']) {
+   if (map[tile_y][tile_x]['move']) {
        // check for blocks in the way of a pushable block
-       if (map[tiley+yadd][tilex+xadd]['type'] === ' ') {
-           // move the tile
-           map[tiley][tilex]['newx'] = map[tiley][tilex]['x'] + xadd;
-           map[tiley][tilex]['newy'] = map[tiley][tilex]['y'] + yadd;
-           console.log(tilex, tilex+xadd);
-           console.log('Moving tile', map[tiley][tilex]['x'], map[tiley][tilex]['newx']);
+       if (map[tile_y+yadd][tile_x+xadd]['type'] === ' ') {
+           // set the tiles' x and newx, so they animate
+           map[tile_y][tile_x]['x'] = tile_x;
+           map[tile_y][tile_x]['newx'] = tile_x + xadd;
+           map[tile_y+yadd][tile_x+xadd]['x'] = tile_x;
+           map[tile_y+yadd][tile_x+xadd]['newx'] = tile_x + xadd;
+           map[tile_y][tile_x]['y'] = tile_y;
+           map[tile_y][tile_x]['newy'] = tile_y + yadd;
+           map[tile_y+yadd][tile_x+xadd]['y'] = tile_y;
+           map[tile_y+yadd][tile_x+xadd]['newy'] = tile_y + yadd;
+
            // recurse for sliding tiles
-           if (map[tiley][tilex]['slide']) push(dir, tilex+xadd, tiley+yadd);
+           if (map[tile_y][tile_x]['slide']) push(dir, tile_x+xadd, tile_y+yadd);
        }
    }
 
@@ -281,67 +288,61 @@ function tween_tiles() {
        for (i=0; i<MAP_WIDTH; i++) {
            var tile = map[j][i];
            if (map[j][i]['type'] !== ' ') {
-
-              if (tile['newx'] !== tile['x']) {
-                 var diffx = Math.abs(tile['x'] - tile['newx']);
-
-                 if (tile['newx'] > tile['x']) {
-                     tile['tweenx'] += TWEENSPEED;
-                     if (Math.abs(tile['tweenx']) > TILESIZE * diffx) {
-                         // swap tile and lava
-                         console.log("hot swap...");
-                         var newx = tile['newx'];
-                         var newy = tile['newy'];
-                         // flip the tiles..
-                         var temp = map[j][i];
-                         map[j][i] = map[newy][newx];
-                         map[newy][newx] = temp;
-                         // then tell the tile it is done moving
-                         tile['newx'] = tile[newx];
-                         tile['tweenx'] = 0;
-                     }
-                 }
-                 else if (tile['newx'] < tile['x']) {
-                     tile['tweenx'] -= TWEENSPEED;
-                     if (Math.abs(tile['tweenx']) > TILESIZE * diffx) {
-                         // swap tile and lava
-                         var newx = tile['newx'];
-                         var newy = tile['newy'];
-                         console.log("hot swap...", tile['x'], tile['newx'], newx);
-                         // flip the tiles..
-                         var temp = map[j][i];
-                         map[j][i] = map[newy][newx];
-                         map[newy][newx] = temp;
-                         // then tell the tile it is done moving
-                         tile['x'] = tile[newx];
-                         tile['newx'] = tile[newx];
-                         tile['tweenx'] = 0;
-                     }
-                 }
-              }
-              if (tile['newy'] !== tile['y']) {
-                 var diffy = Math.abs(tile['y'] - tile['newy']);
-
-                 if (tile['newy'] > tile['y']) {
-                     tile['tweeny'] += TWEENSPEED;
-                     if (Math.abs(tile['tweeny']) > TILESIZE * diffy) {
-                         tile['y'] = tile['newy'];
-                         tile['tweeny'] = 0;
-                     }
-                 }
-                 else if (tile['newy'] < tile['y']) {
-                     tile['tweeny'] -= TWEENSPEED;
-                     if (Math.abs(tile['tweeny']) > TILESIZE * diffy) {
-                         tile['y'] = tile['newy'];
-                         tile['tweeny'] = 0;
-                     }
-                 }
-              }
+               // tween the tiles until they reach their destination
+               if (tile['newx'] !== tile['x']) {
+                  var diffx = Math.abs(tile['x'] - tile['newx']);
+                  if (tile['newx'] > tile['x']) {
+                      tile['tweenx'] += TWEENSPEED;
+                  }
+                  else if (tile['newx'] < tile['x']) {
+                      tile['tweenx'] -= TWEENSPEED;
+                  }
+               }
+               if (tile['newy'] !== tile['y']) {
+                  var diffy = Math.abs(tile['y'] - tile['newy']);
+                  if (tile['newy'] > tile['y']) {
+                      tile['tweeny'] += TWEENSPEED;
+                  }
+                  else if (tile['newy'] < tile['y']) {
+                      tile['tweeny'] -= TWEENSPEED;
+                  }
+               }
+               // swap tiles when they have completed their movement
+               if (Math.abs(tile['tweenx']) > TILESIZE * diffx) {
+                   // swap tile and lava
+                   swap_tiles(i, j, tile['newx'], tile['newy']);
+               }
+               if (Math.abs(tile['tweeny']) > TILESIZE * diffy) {
+                   // swap tile and lava
+                   swap_tiles(i, j, tile['newx'], tile['newy']);
+               }
 
            }
        }
    }
 }
+
+// flip tiles
+function swap_tiles(x, y, newx, newy) {
+     // swap tile and lava
+     console.log("hot swap...");
+     var old_tile = map[y][x];
+     var new_tile = map[newy][newx];
+     // flip the two tiles
+     map[y][x] = new_tile;
+     map[newy][newx] = old_tile;
+     // update the newx and tweenx of the moved tile
+     old_tile['newx'] = i;
+     old_tile['tweenx'] = 0;
+     old_tile['newy'] = j;
+     old_tile['tweeny'] = 0;
+     new_tile['newx'] = newx;
+     new_tile['tweenx'] = 0;
+     new_tile['newy'] = newx;
+     new_tile['tweeny'] = 0;
+}
+
+
 // sets the players move timer to its default value
 function set_move_timer() {
     move_timer = move_timer_time;
