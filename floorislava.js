@@ -5,16 +5,16 @@ var MAP_HEIGHT = 7;
 var MAP_WIDTH = 10;
 var TILES = 
     {' ': {move: false, rot: false, slide: false,
-              barriers: [0,0,0,0]} // blocked at [ right, top, left, down ]
+              barriers: [0,0,0,0]} // blocked at [ right, top, left, bottom ]
     ,
     '#': {move: true, rot: false, slide: true,
-              barriers: [0,0,1,0]} // blocked at [ right, top, left, down ]
+              barriers: [0,0,1,0]} // blocked at [ right, top, left, bottom ]
     };
 var TWEENSPEED = 5;
 var move_timer = 0;
 var action_timer = 0;
-var move_timer_time = 10;
-var action_timer_time = 10;
+var move_timer_time = 10; // min time between consecutive moves
+var action_timer_time = 10; // min time between consecutive actions (jump / rotate / push)
 var player = {x:0, y:0, dir:0, 
     newx:0, newy:0, tweenx:0, tweeny:0}; // [x, y, direction]
 var map;
@@ -109,6 +109,7 @@ function update() {
     tween();
     tween_tiles();
     // keypresses
+    // RIGHT
     if (key[KEY_RIGHT] && move_timer === 0) {
         if (player['dir'] === 0) {
             move(0, 1);
@@ -116,6 +117,7 @@ function update() {
         player['dir'] = 0;
         set_move_timer();
     }
+    // LEFT
     if (key[KEY_LEFT] && move_timer === 0) {
         if (player['dir'] === 2) {
             move(2, 1);
@@ -123,6 +125,7 @@ function update() {
         player['dir'] = 2;
         set_move_timer();
     }
+    // UP
     if (key[KEY_UP] && move_timer === 0) {
         if (player['dir'] === 1) {
             move(1, 1);
@@ -130,6 +133,7 @@ function update() {
         player['dir'] = 1;
         set_move_timer();
     }
+    // DOWN
     if (key[KEY_DOWN] && move_timer === 0) {
         if (player['dir'] === 3) {
             move(3, 1);
@@ -166,8 +170,35 @@ function move(dir, dist) {
     if (dir == 1) newy-=dist;
     if (dir == 2) newx-=dist;
     if (dir == 3) newy+=dist;
-    // check that the move is possible
-    if (check_move(player['x'], player['y'], newx, newy, dir)) {
+    // check that the move is possible:
+    var fail = false; // gets set to true if dist > 1 and we fail a check_move
+    
+    // check moves that are > 1 space
+    if (dist > 1) { 
+        // we need to check all possible spaces that the player will pass over,
+        // and need to check that both the side we are moving from and the side
+        // we are moving out of are free, otherwise don't even check the end tile
+        // as we do below
+        var tempnewx = player['x'];
+        var tempnewy = player['y'];
+
+        for (i=1; i<dist; i++) {
+            if (dir == 0) tempnewx = player['x'] + i;
+            if (dir == 1) tempnewy = player['x'] - i;
+            if (dir == 2) tempnewy = player['y'] - i;
+            if (dir == 3) tempnewy = player['y'] + i;
+
+            // if any of the spaces we move over fail a check_move check
+            if (!(check_move(player['x'], player['y'], tempnewx, tempnewy, dir))) {
+                console.log("JUMPBLOCKED")
+                fail = true;
+                break;
+            } 
+        }
+    }
+
+    // check the start space and end space (above code checks in between spaces if dist > 1)
+    if (!fail && (check_move(player['x'], player['y'], newx, newy, dir))) {
        // console.log('Player moved from (' + player[0] + ', ' + player[1] +
        //         ') to (' + x + ', ' + y + ')');
         //add_move(player[0], player[1], x, y, dir, TWEENSPEED);
@@ -259,6 +290,18 @@ function check_move(x, y, newx, newy, dir) {
         return false;
     }
 
+    // (dir + 2) % 4 checks the side opposite the side we are moving into
+    // eg.   o        if we are moving left ONTO this object, then dir = 2,
+    //     o   o <-   so then (dir+2)%4 = 0, meaning the right side must be 
+    //       x        open, 0, for us to be able to move onto it, which is true.
+    //               
+    //     o          if instead we wanted to move up, dir=1, onto this object,
+    //   o   o        then (dir+2)%4 = 3, which corrosponds to the bottom, which is
+    //     x          1 in this case, so we cannot complete this move.
+    //     ^
+    //     |
+    //
+    // the blocked list for this object would be: [right, top, left, bottom] = [0,0,0,1]
     if ( !(is_blocked(newx, newy, (dir + 2) % 4, false))
     && !(is_blocked(x, y, (dir + 2) % 4, true)) ) {
         return true;
@@ -279,6 +322,8 @@ function is_blocked(x, y, side, underneath) {
     var tile_dir = map[y][x]['dir'];
     var tile = map[y][x]['barriers'];
     var tile_rotated = [0,0,0,0];
+    // the type of the tile gives us the default blocked-sides, so we must
+    // "rotate" the object so the blocked-sides correspond to its rotated state
     tile_rotated[0] = tile[Math.abs((0-tile_dir)%4)];
     tile_rotated[1] = tile[Math.abs((1-tile_dir)%4)];
     tile_rotated[2] = tile[Math.abs((2-tile_dir)%4)];
@@ -356,6 +401,7 @@ function tween_tiles() {
                   }
                }
                // swap tiles when they have completed their movement
+               // TODO: swap tiles right away ? will fix the jump-onto-invisible-chairs-before-they-arrive bug ?
                if (Math.abs(tile['tweenx']) > TILESIZE * diffx) {
                    // swap tile and lava
                    swap_tiles(i, j, tile['newx'], tile['newy']);
