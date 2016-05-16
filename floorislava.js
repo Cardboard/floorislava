@@ -7,7 +7,11 @@ var TILES =
     {' ': {move: false, rot: false, slide: false,
               barriers: [0,0,0,0]} // blocked at [ right, top, left, bottom ]
     ,
-    '#': {move: true, rot: false, slide: true,
+    // MOV chair
+    '#': {move: true, rot: false, slide: false,
+              barriers: [0,0,1,0]} // blocked at [ right, top, left, bottom ]
+    ,
+    '@': {move: true, rot: true, slide: false,
               barriers: [0,0,1,0]} // blocked at [ right, top, left, bottom ]
     };
 var TWEENSPEED = 5;
@@ -24,7 +28,7 @@ types: [
     '          ',
     '          ',
     '    #     ',
-    '   ###    ',
+    '   #@#    ',
     '    #     ',
     '          ',
     '          '], 
@@ -41,6 +45,7 @@ dirs: [
 // images
 var img_player;
 var img_movchair;
+var img_rotchair;
 
 // audio
 
@@ -89,8 +94,19 @@ function draw() {
     // j=y, i=x
     for (var j = 0; j < MAP_HEIGHT; j++) {
         for (var i = 0; i < MAP_WIDTH; i++) {
-            if (map[j][i]['type'] == '#') {
-                rotate_sprite(canvas, img_movchair, 
+            var tileimg;
+            switch (map[j][i]['type']) {
+                case '#':
+                    tileimg = img_movchair;
+                    break;
+                case '@':
+                    tileimg = img_rotchair;
+                    break;
+                default:
+                    tileimg = ' ';
+            }
+            if (tileimg != ' ') {
+                rotate_sprite(canvas, tileimg, 
                               coord2pos(i)+map[j][i]['tweenx'], coord2pos(j)+map[j][i]['tweeny'],
                               int2dir(map[j][i]['dir']));
             }
@@ -153,6 +169,11 @@ function update() {
         push(player['dir'], player['x'], player['y']);
         set_action_timer();
     }
+    // rotate
+    if (key[KEY_C] && action_timer === 0) {
+        rotate(player['dir'], player['x'], player['y']);
+        set_action_timer();
+    }
     // update the timers
     if (move_timer !== 0) move_timer -= 1;
     if (action_timer !== 0) action_timer -= 1;
@@ -173,6 +194,13 @@ function move(dir, dist) {
     // check that the move is possible:
     var fail = false; // gets set to true if dist > 1 and we fail a check_move
     
+    // checks if a tile we want to move onto is currently in motion, &
+    // if so, don't allow the move
+    if (map[newy][newx]['x'] != map[newy][newx]['newx']
+        || map[newy][newx]['y'] != map[newy][newx]['newy']) {
+            fail = true;
+    }
+
     // check moves that are > 1 space
     if (dist > 1) { 
         // we need to check all possible spaces that the player will pass over,
@@ -189,9 +217,12 @@ function move(dir, dist) {
             if (dir == 3) tempnewy = player['y'] + i;
 
             // if any of the spaces we move over fail a check_move check
-            if (!(check_move(player['x'], player['y'], tempnewx, tempnewy, dir))) {
+                // if the tile is lava we can ignore the check_move result
+            if (map[tempnewy][tempnewx]['type'] != ' '
+                // if there is a NON-LAVA tile, then the check_move for that tile needs to pass
+                && !(check_move(player['x'], player['y'], tempnewx, tempnewy, dir))) {
                 console.log("JUMPBLOCKED")
-                fail = true;
+                fail = true; // don't really need this because we break i guess
                 break;
             } 
         }
@@ -221,9 +252,9 @@ function push(dir, x, y) {
    if (tile_x >= MAP_WIDTH || tile_x < 0 || tile_y >= MAP_HEIGHT || tile_y < 0) return false;
    // find tile that will be pushed (if possible) 
    if (map[tile_y][tile_x]['move']) {
-       // check for blocks in the way of a pushable block
+       // make sure no blocks in the way of a pushable block
        if (map[tile_y+yadd][tile_x+xadd]['type'] === ' ') {
-           // recurse for sliding tileis
+           // recurse for sliding tiles
            if (map[tile_y][tile_x]['slide']) {
                slide(dir, tile_x, tile_y, xadd, yadd);
                return;
@@ -273,6 +304,42 @@ function slide(dir, x, y, xadd, yadd) {
         map[tile_y+yadd][tile_x+xadd]['y'] = tile_y;
         map[tile_y+yadd][tile_x+xadd]['newy'] = tile_y + yadd;
     }
+}
+
+// rotate a block if possible
+// TODO
+function rotate(dir, x, y) {
+   // find the offset from the player's tile of the tile to push
+   var xadd = 0;
+   var yadd = 0;
+   if (dir === 0) xadd = 1;
+   if (dir === 1) yadd = -1;
+   if (dir === 2) xadd = -1;
+   if (dir === 3) yadd = 1;
+   var tile_x = x + xadd;
+   var tile_y = y + yadd;
+   if (tile_x >= MAP_WIDTH || tile_x < 0 || tile_y >= MAP_HEIGHT || tile_y < 0) return false;
+   // find tile that will be pushed (if possible) 
+   if (map[tile_y][tile_x]['move']) {
+       // check for blocks in the way of a pushable block
+       if (map[tile_y+yadd][tile_x+xadd]['type'] === ' ') {
+           // recurse for sliding tileis
+           if (map[tile_y][tile_x]['slide']) {
+               slide(dir, tile_x, tile_y, xadd, yadd);
+               return;
+           }
+           // set the tiles' x and newx, so they animate
+           map[tile_y][tile_x]['x'] = tile_x;
+           map[tile_y][tile_x]['newx'] = tile_x + xadd;
+           map[tile_y+yadd][tile_x+xadd]['x'] = tile_x;
+           map[tile_y+yadd][tile_x+xadd]['newx'] = tile_x + xadd;
+           map[tile_y][tile_x]['y'] = tile_y;
+           map[tile_y][tile_x]['newy'] = tile_y + yadd;
+           map[tile_y+yadd][tile_x+xadd]['y'] = tile_y;
+           map[tile_y+yadd][tile_x+xadd]['newy'] = tile_y + yadd;
+
+       }
+   }
 }
 
 // check if a player's intended move is possible
@@ -483,6 +550,7 @@ function main() {
     // load stuff
     img_player = load_bmp("data/player.png");
     img_movchair = load_bmp("data/movchair.png");
+    img_rotchair = load_bmp("data/rotchair.png");
     // set level
     map = level_0;
     level2map(level_0);
