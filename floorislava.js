@@ -25,17 +25,17 @@ var map;
 var map_default = []; // for resetting
 var level_0 = { startx: 4, starty: 3, //[ (end_x, end_y), [objects], [directions] ] 
 types: [
-    '          ',
-    '          ',
-    '    #     ',
-    '   #@#    ',
+    '   #      ',
+    '   #      ',
+    '   #@     ',
+    '   #@@    ',
     '    #     ',
     '          ',
     '          '], 
 dirs: [
-    '          ',
-    '          ',
-    '    3     ',
+    '   0      ',
+    '   0      ',
+    '   03     ',
     '   002    ',
     '    1     ',
     '          ',
@@ -67,7 +67,8 @@ function level2map(level) {
                 rot: TILES[type]['rot'],
                 slide:TILES[type]['slide'],
                 barriers: TILES[type]['barriers'],
-                newx: i, newy: j, tweenx: 0, tweeny: 0};
+                newx: i, newy: j, tweenx: 0, tweeny: 0,
+                angle: (dir * 90) % 360, newangle: (dir * 90) % 360, tweenrot: 0};
             // add the tile to the row of tiles
             newrow.push(newtile);
         }
@@ -108,7 +109,7 @@ function draw() {
             if (tileimg != ' ') {
                 rotate_sprite(canvas, tileimg, 
                               coord2pos(i)+map[j][i]['tweenx'], coord2pos(j)+map[j][i]['tweeny'],
-                              int2dir(map[j][i]['dir']));
+                              map[j][i]['angle']+map[j][i]['tweenrot']);
             }
         }
     }
@@ -158,14 +159,13 @@ function update() {
         set_move_timer();
     }
     // jump!
-    if (key[KEY_Z] && action_timer === 0) {
+    if (key[KEY_Z] && action_timer === 0 && !is_player_moving()) {
         move(player['dir'], 2);
-        console.log('JUMP!');
         set_action_timer();
         set_move_timer(); //@ GET RID OF THIS?
     }
     // push!
-    if (key[KEY_X] && action_timer === 0) {
+    if (key[KEY_X] && action_timer === 0 && !is_player_moving()) {
         push(player['dir'], player['x'], player['y']);
         set_action_timer();
     }
@@ -196,6 +196,8 @@ function move(dir, dist) {
     
     // checks if a tile we want to move onto is currently in motion, &
     // if so, don't allow the move
+    // TODO 'newy' & 'newx' are undefined if attempting to move/jump off the map, which throws some type errors.
+    // check for this in the future to suppress that crap
     if (map[newy][newx]['x'] != map[newy][newx]['newx']
         || map[newy][newx]['y'] != map[newy][newx]['newy']) {
             fail = true;
@@ -209,19 +211,28 @@ function move(dir, dist) {
         // as we do below
         var tempnewx = player['x'];
         var tempnewy = player['y'];
+        // check the space 2 away to make sure we can move OFF the space we are jumping over,
+        // as well as ONTO it (which is checked with tempnewx, tempnewy)
+        var tempnewx2 = player['x'];
+        var tempnewy2 = player['y'];
 
         for (i=1; i<dist; i++) {
             if (dir == 0) tempnewx = player['x'] + i;
-            if (dir == 1) tempnewy = player['x'] - i;
-            if (dir == 2) tempnewy = player['y'] - i;
+            if (dir == 1) tempnewy = player['y'] - i;
+            if (dir == 2) tempnewx = player['x'] - i;
             if (dir == 3) tempnewy = player['y'] + i;
+            if (dir == 0) tempnewx2 = player['x'] + (i + 1);
+            if (dir == 1) tempnewy2 = player['y'] - (i + 1);
+            if (dir == 2) tempnewx2 = player['x'] - (i + 1);
+            if (dir == 3) tempnewy2 = player['y'] + (i + 1);
 
             // if any of the spaces we move over fail a check_move check
                 // if the tile is lava we can ignore the check_move result
             if (map[tempnewy][tempnewx]['type'] != ' '
                 // if there is a NON-LAVA tile, then the check_move for that tile needs to pass
-                && !(check_move(player['x'], player['y'], tempnewx, tempnewy, dir))) {
-                console.log("JUMPBLOCKED")
+                && (!(check_move(player['x'], player['y'], tempnewx, tempnewy, dir)) 
+                || !(check_move(tempnewx, tempnewy, tempnewx2, tempnewy2, dir)))) {
+                //console.log("JUMPBLOCKED")
                 fail = true; // don't really need this because we break i guess
                 break;
             } 
@@ -249,7 +260,7 @@ function push(dir, x, y) {
    if (dir === 3) yadd = 1;
    var tile_x = x + xadd;
    var tile_y = y + yadd;
-   if (tile_x >= MAP_WIDTH || tile_x < 0 || tile_y >= MAP_HEIGHT || tile_y < 0) return false;
+   if (tile_x >= MAP_WIDTH || tile_x < 0 || tile_y >= MAP_HEIGHT || tile_y < 0) return;
    // find tile that will be pushed (if possible) 
    if (map[tile_y][tile_x]['move']) {
        // make sure no blocks in the way of a pushable block
@@ -274,20 +285,20 @@ function push(dir, x, y) {
 }
 
 function slide(dir, x, y, xadd, yadd) {
-    console.log(x+xadd, MAP_WIDTH);
+    //console.log(x+xadd, MAP_WIDTH);
     if (x + xadd < MAP_WIDTH
     &&  x + xadd >= 0
     &&  y + yadd < MAP_HEIGHT
     &&  y + yadd >= 0
     &&  map[y+yadd][x+xadd]['type'] == ' ') {
-        console.log('sliding..', x+xadd, y+yadd);
+        //console.log('sliding..', x+xadd, y+yadd);
         if (xadd > 0) xadd += 1;
         if (xadd < 0) xadd -= 1;
         if (yadd > 0) yadd += 1;
         if (yadd < 0) yadd -= 1;
         slide(dir, x, y, xadd, yadd);
     } else {
-        console.log('*impact*');
+        //console.log('*impact*');
         var tile_x = x;
         var tile_y = y;
         if (xadd > 0) xadd -= 1;
@@ -309,7 +320,7 @@ function slide(dir, x, y, xadd, yadd) {
 // rotate a block if possible
 // TODO
 function rotate(dir, x, y) {
-   // find the offset from the player's tile of the tile to push
+   // find the offset from the player's tile of the tile to rotate
    var xadd = 0;
    var yadd = 0;
    if (dir === 0) xadd = 1;
@@ -318,42 +329,26 @@ function rotate(dir, x, y) {
    if (dir === 3) yadd = 1;
    var tile_x = x + xadd;
    var tile_y = y + yadd;
-   if (tile_x >= MAP_WIDTH || tile_x < 0 || tile_y >= MAP_HEIGHT || tile_y < 0) return false;
-   // find tile that will be pushed (if possible) 
-   if (map[tile_y][tile_x]['move']) {
-       // check for blocks in the way of a pushable block
-       if (map[tile_y+yadd][tile_x+xadd]['type'] === ' ') {
-           // recurse for sliding tileis
-           if (map[tile_y][tile_x]['slide']) {
-               slide(dir, tile_x, tile_y, xadd, yadd);
-               return;
-           }
-           // set the tiles' x and newx, so they animate
-           map[tile_y][tile_x]['x'] = tile_x;
-           map[tile_y][tile_x]['newx'] = tile_x + xadd;
-           map[tile_y+yadd][tile_x+xadd]['x'] = tile_x;
-           map[tile_y+yadd][tile_x+xadd]['newx'] = tile_x + xadd;
-           map[tile_y][tile_x]['y'] = tile_y;
-           map[tile_y][tile_x]['newy'] = tile_y + yadd;
-           map[tile_y+yadd][tile_x+xadd]['y'] = tile_y;
-           map[tile_y+yadd][tile_x+xadd]['newy'] = tile_y + yadd;
-
-       }
+   if (tile_x >= MAP_WIDTH || tile_x < 0 || tile_y >= MAP_HEIGHT || tile_y < 0) return;
+   // find tile that will be rotated (if possible) 
+   if (map[tile_y][tile_x]['rot'] === true) {
+       // set the tiles' angle and newangle, so it animates
+       var old_angle = map[tile_y][tile_x]['angle'];
+       map[tile_y][tile_x]['newangle'] = (old_angle + 90) % 360;
    }
 }
 
 // check if a player's intended move is possible
 // return true if the movement is possible
 function check_move(x, y, newx, newy, dir) {
-    // if the map ends in either direction blocked
+    // if the map ends in either direction, disallow the desired move
     if (player['x'] === 0 && dir === 2) return false;
     if (player['x'] === MAP_WIDTH-1 && dir === 0) return false;
     if (player['y'] === 0 && dir === 1) return false;
     if (player['y'] === MAP_HEIGHT-1 && dir === 3) return false;
 
+    // disallow moves onto lava
     if (map[newy][newx]['type'] === ' ') {
-        console.log(newx, newy);
-        console.log("LAVA LAVA LAVA");
         return false;
     }
 
@@ -373,11 +368,21 @@ function check_move(x, y, newx, newy, dir) {
     && !(is_blocked(x, y, (dir + 2) % 4, true)) ) {
         return true;
     }
-    console.log("direction IS blocked");
+    //console.log("direction IS blocked");
     return false;
 }
 
+// used to prevent the player from pushing or rotating anything whilst in motion
+function is_player_moving() {
+    if (player['tweenx'] !== 0 || player['tweeny'] !== 0) {
+        return true;
+    }
+    return false;
+}
+
+
 // check if tile has a barrier on a given side
+// TODO wth does 'underneath' mean
 function is_blocked(x, y, side, underneath) {
     if (underneath === true) {
         underneath = 2;
@@ -386,7 +391,7 @@ function is_blocked(x, y, side, underneath) {
     }
     // get tile info from the map 
     var tile_type = map[y][x]['type'];
-    var tile_dir = map[y][x]['dir'];
+    var tile_dir = parseInt(map[y][x]['dir']);
     var tile = map[y][x]['barriers'];
     var tile_rotated = [0,0,0,0];
     // the type of the tile gives us the default blocked-sides, so we must
@@ -395,7 +400,7 @@ function is_blocked(x, y, side, underneath) {
     tile_rotated[1] = tile[Math.abs((1-tile_dir)%4)];
     tile_rotated[2] = tile[Math.abs((2-tile_dir)%4)];
     tile_rotated[3] = tile[Math.abs((3-tile_dir)%4)];
-    console.log(tile_rotated, tile_rotated[(side+underneath)%4]);
+    //console.log(tile_rotated);
 
     // return true if the tile has a barrier on the side
     // the player wishes to move into
@@ -449,6 +454,7 @@ function tween_tiles() {
            var tile = map[j][i];
            if (map[j][i]['type'] !== ' ') {
                // tween the tiles until they reach their destination
+               // MOVEMENT TWEENING
                if (tile['newx'] !== tile['x']) {
                   var diffx = Math.abs(tile['x'] - tile['newx']);
                   if (tile['newx'] > tile['x']) {
@@ -468,14 +474,28 @@ function tween_tiles() {
                   }
                }
                // swap tiles when they have completed their movement
-               // TODO: swap tiles right away ? will fix the jump-onto-invisible-chairs-before-they-arrive bug ?
-               if (Math.abs(tile['tweenx']) > TILESIZE * diffx) {
-                   // swap tile and lava
-                   swap_tiles(i, j, tile['newx'], tile['newy']);
+               // (if they moved at all)
+               if (tile['tweenx'] !== 0 || tile['tweeny'] !== 0) {
+                   if (Math.abs(tile['tweenx']) > TILESIZE * diffx) {
+                       // swap tile and lava
+                       swap_tiles(i, j, tile['newx'], tile['newy']);
+                   }
+                   if (Math.abs(tile['tweeny']) > TILESIZE * diffy) {
+                       // swap tile and lava
+                       swap_tiles(i, j, tile['newx'], tile['newy']);
+                   }
                }
-               if (Math.abs(tile['tweeny']) > TILESIZE * diffy) {
-                   // swap tile and lava
-                   swap_tiles(i, j, tile['newx'], tile['newy']);
+               // ROTATION TWEENING
+               if (tile['newangle'] !== tile['angle']) {
+                  tile['tweenrot'] += TWEENSPEED;
+               }
+               if (tile['tweenrot'] !== 0) {
+                   // done rotating
+                   if (Math.abs(tile['tweenrot']) >= 90) {
+                       tile['angle'] = tile['newangle'];
+                       tile['tweenrot'] = 0;
+                       shift_barriers(i, j);
+                   }
                }
 
            }
@@ -486,22 +506,35 @@ function tween_tiles() {
 // flip tiles
 function swap_tiles(x, y, newx, newy) {
      // swap tile and lava
-     console.log("hot swap...");
+     //console.log("hot swap...");
      var old_tile = map[y][x];
      var new_tile = map[newy][newx];
      // flip the two tiles
      map[y][x] = new_tile;
      map[newy][newx] = old_tile;
      // update the newx and tweenx of the moved tile
-     old_tile['newx'] = i;
+     old_tile['newx'] = x;
      old_tile['tweenx'] = 0;
-     old_tile['newy'] = j;
+     old_tile['newy'] = y;
      old_tile['tweeny'] = 0;
      new_tile['newx'] = newx;
      new_tile['tweenx'] = 0;
      new_tile['newy'] = newx;
      new_tile['tweeny'] = 0;
 }
+
+// shift barriers due to a rotation
+// TODO fix this crap (perhaps setting the barriers based on the original tile's
+// barriers and the tile's new rotation would be sufficient here, rather than
+// simply shifting all of the barrier values over)
+function shift_barriers(x, y) {
+    // simply decrease the direction of the tile (keeping it between [0,3]) because the check_tile
+    // function takes the tile's rotation into account when figuring out where its barriers are located
+    map[y][x]['dir'] = (parseInt(map[y][x]['dir']) + 1) % 4
+    //console.log(map[y][x]['dir']);
+}
+
+
 
 // move the player without tweening
 function set_player_loc(x, y) {

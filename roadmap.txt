@@ -1,0 +1,5 @@
+* implement tile rotation
+        * add tile barrier updating after rotation completes
+- fix being able to jump through tile walls you shouldn't be able to move through
+- trying to jump off the map causes an error
+- make the code handling drawing tiles nicer ?

@@ -1,3 +1,0 @@
-- trying to jump off the map causes an error
-- make the code handling drawing tiles nicer ?
-- define rotate(dir, x, y) !!!!!!!
