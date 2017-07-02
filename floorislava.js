@@ -171,8 +171,10 @@ function update() {
     }
     // rotate
     if (key[KEY_C] && action_timer === 0) {
-        rotate(player['dir'], player['x'], player['y']);
-        set_action_timer();
+        if (player['tweenx'] === 0 && player['tweeny'] === 0) {
+            rotate(player['dir'], player['x'], player['y']);
+            set_action_timer();
+        }
     }
     // update the timers
     if (move_timer !== 0) move_timer -= 1;
@@ -349,6 +351,11 @@ function check_move(x, y, newx, newy, dir) {
 
     // disallow moves onto lava
     if (map[newy][newx]['type'] === ' ') {
+        return false;
+    }
+
+    // don't allow moves onto tiles that are currently rotating
+    if (map[newy][newx]['tweenrot'] !== 0) {
         return false;
     }
 
